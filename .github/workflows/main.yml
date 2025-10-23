@@ -1,0 +1,48 @@
+name: CI/CD Pipeline for Telegram Bot
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Run tests
+      run: |
+        python api.py  # Add your tests here (e.g., pytest if you have them)
+
+  deploy:
+    needs: test  # Only deploy if tests pass
+    if: github.ref == 'refs/heads/main'  # Only on main branch
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install Heroku CLI
+      run: |
+        curl https://cli-assets.heroku.com/install.sh | sh
+    - name: Login to Heroku
+      run: heroku login -i --interactive=false --api-key ${{ secrets.HEROKU_API_KEY }}
+    - name: Create Heroku App
+      run: |
+        heroku create your-bot-app-name --build-dir .  # Replace with unique name
+    - name: Deploy to Heroku
+      run: |
+        git push heroku main
+        heroku config:set BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+        heroku ps:scale worker=1  # Scale dyno to run bot continuously
