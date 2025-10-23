@@ -1,90 +1,47 @@
-name: CI Pipeline for Encryption Bot
+name: Python Application CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
+  schedule:
+    - cron: "0 */6 * * *"  # Runs every 6 hours
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, 3.10]  # Test on multiple Python versions
 
     steps:
-      # 1️⃣ Checkout the repository
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-      # 2️⃣ Clean up lock file safely
-      - name: Clean up lock file
-        run: |
-          if [ -f bot_lock.lock ]; then
-            echo "Removing old lock file..."
-            rm -f bot_lock.lock
-          else
-            echo "No lock file found. Skipping."
-          fi
-
-      # 3️⃣ Set up Python
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set Up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
 
-      # 4️⃣ Install system dependencies
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y build-essential python3-dev libffi-dev
+      - name: Cache Dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
-      # 5️⃣ Install Python dependencies (no error if missing)
-      - name: Install Python dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            echo "Installing dependencies from requirements.txt..."
-            pip install -r requirements.txt
-          else
-            echo "No requirements.txt found. Skipping dependency install."
-          fi
+          pip install -r requirements.txt
+          pip install telebot pymongo aiohttp python-telegram-bot pyTelegramBotAPI certifi
 
-      # 6️⃣ Lint with flake8 (strict but clean)
-      - name: Lint with flake8
-        run: |
-          pip install flake8
-          echo "Running flake8 lint check..."
-          flake8 . --max-line-length=120 --exclude=venv || true
-          echo "✅ Linting completed successfully."
+      - name: Set Execute Permissions
+        run: chmod +x *
 
-      # 7️⃣ Run tests (optional but no error if none)
-      - name: Run tests
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        run: |
-          if [ -d tests ]; then
-            echo "Running unit tests..."
-            python -m unittest discover -s tests -p "test_*.py"
-            echo "✅ All tests completed successfully."
-          else
-            echo "No tests folder found. Skipping tests."
-          fi
-
-      # 8️⃣ Validate bot.py execution (syntax validation only)
-      - name: Validate bot.py execution
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        run: |
-          if [ -f bot.py ]; then
-            echo "Checking bot.py for syntax errors..."
-            python -m py_compile bot.py
-            echo "✅ Syntax check passed."
-            echo "Running bot.py in test mode (if implemented)..."
-            python bot.py --test-mode || echo "bot.py exited (expected if test mode not implemented)."
-          else
-            echo "❌ bot.py not found! Please ensure it exists in the repository root."
-            exit 1
-          fi
-
-      # 9️⃣ Job complete
-      - name: Job complete
-        run: echo "🎉 CI Pipeline completed successfully — all steps passed with no errors!"
+      - name: Run Application
+        run: python bot.py
