@@ -1,0 +1,5 @@
+pyTelegramBotAPI
+cryptography
+pefile
+pyelftools
+pwntools
